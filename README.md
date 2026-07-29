@@ -29,7 +29,6 @@ PhotoShare lets you create groups, organize shared albums inside them, and contr
 - [How the App Is Organized](#how-the-app-is-organized)
 - [Download & Install the APK](#download--install-the-apk)
 - [Build Information](#build-information)
-- [Roadmap](#roadmap)
 - [Known Limitations](#known-limitations)
 - [Contributing](#contributing)
 - [License](#license)
@@ -188,7 +187,7 @@ The app follows a feature-first Clean Architecture layout, with each feature (au
 
 > Since this repository is APK-only, `docs/architecture.md` is a description of how the app is built, for anyone curious — it isn't a guide to building from source.
 
-## Download and install apk
+## Download & Install the APK
 
 The latest Android version of **PhotoShare** is available from the project's GitHub Releases page.
 
@@ -240,4 +239,6 @@ This project is licensed under the MIT License — see [LICENSE](LICENSE) for de
 
 Built and maintained by [Pouria26](https://github.com/Pouria26).
 
-Third-party services used: [Supabase](https://supabase.com), [Cloudinary](https://cloudinary.com), [Firebase Cloud Messaging](https://firebase.google.com/products/cloud-messaging).
+Third-party services used: [Supabase](https://supabase.com), [Cloudinary](https://cloudinary.com)
+
+⭐ Thanks for taking the time to explore PhotoShare! Your feedback, ideas, and support mean a lot and help shape the future of the project.❤️
