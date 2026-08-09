@@ -4,7 +4,7 @@
 
 ![Status](https://img.shields.io/badge/status-alpha-orange)
 ![Platform](https://img.shields.io/badge/platform-Android-3DDC84)
-![Version](https://img.shields.io/badge/version-v0.0.1--alpha-blue)
+![Version](https://img.shields.io/badge/version-v0.0.5--alpha-blue)
 ![License](https://img.shields.io/badge/license-MIT-lightgrey)
 
 <p align="center">
@@ -13,7 +13,7 @@
 
 PhotoShare lets you create groups, organize shared albums inside them, and control — per album, per photo, and per member — exactly who gets to see what. It's built with Flutter on top of Supabase (Postgres + Auth + Realtime) and Cloudinary for image hosting.
 
-> **v0.0.1-alpha** — first public build. This is an early, personal-project-stage release: expect rough edges, and please read [Known Limitations](#known-limitations) before reporting something as a bug.
+> **v0.0.5-alpha** — the offline-first release. Your groups, albums, photos, notifications, and profile are cached locally, so the app opens instantly, keeps working without a connection, and re-syncs automatically when you're back online. This is still an early, personal-project-stage release: expect rough edges, and please read [Known Limitations](#known-limitations) before reporting something as a bug. See [CHANGELOG.md](CHANGELOG.md) for what's new in this release.
 >
 > This repository distributes a **pre-built Android APK only** — the app's source code is not published here.
 
@@ -41,26 +41,28 @@ PhotoShare lets you create groups, organize shared albums inside them, and contr
 
 | | |
 |---|---|
-| Version | `v0.0.1-alpha` |
+| Version | `v0.0.5-alpha` |
 | Platform | Android only |
 | Distribution | Signed release APK, attached to the [GitHub Release](https://github.com/Pouria26/Photoshare/releases) |
 | Source code | Not published in this repository — this is an APK-only distribution |
 | Backend | Supabase (a shared backend operated by the developer; you don't need your own project to use the APK) |
-| Stability | Alpha — core flows work end-to-end but are still being hardened |
+| Stability | Alpha — core flows work end-to-end, now offline-first |
 
 ---
 
 ## Main Features
 
-- **Groups** — create private (invite-only) or public (discoverable, unlimited members) groups, each with a cover image and up to 5 topic tags.
+- **Groups** — create private (invite-only) or public (discoverable, open to new members) groups, each with a cover image and up to 5 topic tags.
 - **Albums with per-member visibility** — inside a group, each album can be shared with a specific subset of members, so different people can see different albums in the same group.
 - **Photo uploads with per-photo visibility** — when sharing a photo into a group album, you can further restrict which individual members can see that specific photo.
 - **Explore** — discover public groups and browse trending public photos, sorted by recent activity ("Hot").
 - **Friends** — search for users by username, send/accept/decline friend requests, and see mutual groups on their profile.
 - **Group invitations & join requests** — invite friends directly to a group, or let people request to join a group that requires approval.
-- **Notifications** — Receive notifications for likes, comments, group invitations, and other important activity. Notification features continue to be refined as the app evolves.
+- **Notifications** — receive notifications for likes, comments, group invitations, and other important activity.
 - **Profiles** — your own profile (stats, photo grid, edit profile, light/dark theme) and public profile pages for other members.
-- **Light & dark themes.**
+- **Offline-first** — your groups, albums, photos, notifications, and profile work from a local cache when there's no connection; reads are instant, fresh data re-syncs in the background, and screens recover automatically when you're back online.
+- **Storage Dashboard** — see exactly which images the app has cached (Home + Photos), browse them, delete individual files, or clear everything from Profile → Storage.
+- **Themes** — System, Light, and Dark modes with support for following the device appearance or selecting a theme manually.
 
 ---
 
@@ -140,18 +142,32 @@ Friend requests, group invites, and join requests all flow through the same in-a
 
 ### Profile
 
-The profile screen doubles as your settings hub, including the light/dark theme toggle.
+The profile screen serves as both your personal profile and settings hub. It brings together your account information, activity overview, recent content, and app preferences.
 
 <table>
 <tr>
-<td width="50%"><img src="assets/screenshots/profile-light.jpg" alt="Profile screen, light theme"></td>
-<td width="50%"><img src="assets/screenshots/profile-dark.jpg" alt="Profile screen, dark theme"></td>
+<td width="50%"><img src="assets/screenshots/profile-upper.jpg" alt="Upper section of the Profile screen"></td>
+<td width="50%"><img src="assets/screenshots/profile-lower.jpg" alt="Lower section of the Profile screen"></td>
 </tr>
 <tr>
-<td valign="top"><b>Light theme.</b> Your stats (groups, friends, photos), an "Edit Profile" shortcut, and your recent photos and groups at a glance.</td>
-<td valign="top"><b>Dark theme.</b> The same profile screen with the dark theme enabled, scrolled down to the Settings section (theme toggle, notification settings, about).</td>
+<td valign="top"><b>Profile · Upper section.</b> Your profile information, statistics, edit profile access, and recent content at a glance.</td>
+<td valign="top"><b>Profile · Lower section.</b> Additional profile content and the settings area, including theme, notification, and app preferences.</td>
 </tr>
 </table>
+
+PhotoShare supports three appearance modes — <b>System</b>, <b>Light</b>, and <b>Dark</b>. The System option follows the device's current appearance, while Light and Dark can be selected manually.
+
+---
+
+### Storage & Image Cache
+
+PhotoShare includes a dedicated storage screen for monitoring and managing locally cached images. It shows the amount of cached data, breaks usage down by app section, and allows cached content to be cleared when needed.
+
+<p align="center">
+  <img src="assets/screenshots/storage-cache.jpg" alt="Storage and image cache screen" width="350">
+</p>
+
+<p align="center"><b>Storage & Image Cache.</b> Monitor local image cache usage by section, inspect cached photos, and clear cached content when needed.</p>
 
 ---
 
@@ -164,7 +180,8 @@ The profile screen doubles as your settings hub, including the light/dark theme 
 | Routing | `go_router` |
 | Backend | Supabase (PostgreSQL, Auth, Realtime) |
 | Image hosting | Cloudinary, via direct HTTP calls (no Cloudinary SDK) |
-| Local persistence | `flutter_secure_storage`, `shared_preferences`, `path_provider` |
+| Local persistence | `flutter_secure_storage`, `shared_preferences`, `path_provider`, `hive`/`hive_flutter` (offline metadata cache), `flutter_cache_manager` (offline image-byte cache) |
+| Connectivity | `connectivity_plus` (offline detection, banner, auto-recovery) |
 | Image handling | `image_picker`, `flutter_image_compress`, `cached_network_image`, `photo_view` |
 | Push notifications | `flutter_local_notifications`, `firebase_core`, `firebase_messaging` |
 | Sharing | `share_plus` |
@@ -184,9 +201,9 @@ The APK distributed in [Releases](https://github.com/Pouria26/Photoshare/release
 
 ## How the App Is Organized
 
-The app follows a feature-first Clean Architecture layout, with each feature (auth, groups, albums, photos, social, friends, notifications, explore, profile) split into `data` / `domain` / `presentation` layers, Riverpod providers for state, and `go_router` for navigation. See [`docs/architecture.md`](docs/architecture.md) for a full breakdown.
+The app follows a feature-first Clean Architecture layout, with each feature (auth, groups, albums, photos, social, friends, notifications, explore, profile) split into `data` / `domain` / `presentation` layers, Riverpod providers for state, and `go_router` for navigation. See [`docs/architecture.md`](docs/architecture.md) for a full breakdown, and [`docs/offline-first.md`](docs/offline-first.md) for how the local caching layer (Hive + `flutter_cache_manager`) fits into that architecture.
 
-> Since this repository is APK-only, `docs/architecture.md` is a description of how the app is built, for anyone curious — it isn't a guide to building from source.
+> Since this repository is APK-only, these docs describe how the app is built, for anyone curious — they aren't a guide to building from source.
 
 ## Download and install apk
 
@@ -202,6 +219,8 @@ https://github.com/Pouria26/Photoshare/releases/latest
 3. Open the downloaded APK and complete the installation.
 4. Launch **PhotoShare**, create an account or sign in, and start sharing your memories.
 
+> Updating from an earlier version? Just install the new APK over the old one — your local cache is rebuilt automatically and nothing needs to be cleared manually.
+
 ---
 
 ## Build Information
@@ -210,11 +229,10 @@ https://github.com/Pouria26/Photoshare/releases/latest
 | --------------------------- | ----------------------------------------------- |
 | **Application**             | PhotoShare                                      |
 | **Platform**                | Android                                         |
-| **Current Version**         | v0.0.1-alpha                                    |
-| **Version Code**            | 0.0.1+1                                         |
+| **Current Version**         | v0.0.5-alpha                                    |
+| **Version Code**            | 0.0.5+1                                         |
 | **Minimum Android Version** | Android 7.0 (API 24) or later                   |
 | **Release Type**            | Alpha                                           |
-
 
 ## Known Limitations
 
@@ -222,6 +240,8 @@ https://github.com/Pouria26/Photoshare/releases/latest
 - **Alpha quality** — this is a personal project in active development; expect bugs and rough edges.
 - **Source code is not published** — this repository distributes the APK and documentation only.
 - **Backend is shared, not self-hosted** — the app talks to a Supabase/Cloudinary backend operated by the developer; there's no option to point it at your own backend from this build.
+- **Offline is a viewing cache, not a sync engine** — image bytes are cached only for images you've actually viewed, and mutations (uploads, edits, removals) require connectivity: they fail fast with a clear error rather than being queued.
+- **Connectivity detection is link-level** — `connectivity_plus` reports whether a network *interface* is present, not whether it has real internet (e.g. a captive portal). API calls still handle their own timeouts on top of that signal.
 
 ## Contributing
 
@@ -240,4 +260,4 @@ This project is licensed under the MIT License — see [LICENSE](LICENSE) for de
 
 Built and maintained by [Pouria26](https://github.com/Pouria26).
 
-Third-party services used: [Supabase](https://supabase.com), [Cloudinary](https://cloudinary.com), [Firebase Cloud Messaging](https://firebase.google.com/products/cloud-messaging).
+Third-party services used: [Supabase](https://supabase.com), [Cloudinary](https://cloudinary.com)
