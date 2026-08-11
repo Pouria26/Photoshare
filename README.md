@@ -2,9 +2,9 @@
 
 **A collaborative photo-sharing app built with Flutter and Supabase.**
 
-![Status](https://img.shields.io/badge/status-alpha-orange)
+![Status](https://img.shields.io/badge/status-beta-yellow)
 ![Platform](https://img.shields.io/badge/platform-Android-3DDC84)
-![Version](https://img.shields.io/badge/version-v0.0.5--alpha-blue)
+![Version](https://img.shields.io/badge/version-v0.1.0--beta-blue)
 ![License](https://img.shields.io/badge/license-MIT-lightgrey)
 
 <p align="center">
@@ -13,7 +13,7 @@
 
 PhotoShare lets you create groups, organize shared albums inside them, and control — per album, per photo, and per member — exactly who gets to see what. It's built with Flutter on top of Supabase (Postgres + Auth + Realtime) and Cloudinary for image hosting.
 
-> **v0.0.5-alpha** — the offline-first release. Your groups, albums, photos, notifications, and profile are cached locally, so the app opens instantly, keeps working without a connection, and re-syncs automatically when you're back online. This is still an early, personal-project-stage release: expect rough edges, and please read [Known Limitations](#known-limitations) before reporting something as a bug. See [CHANGELOG.md](CHANGELOG.md) for what's new in this release.
+> **v0.1.0-beta** — the visibility & friends release. Every album and photo can be scoped to a hand-picked member list through dedicated **Manage Visibility** screens, friend discovery shows your four relationship states and accepts incoming requests right from search, and clearing the image caches now actually frees disk space. Built on the offline-first foundation from v0.0.5 (local cache, instant opens, auto re-sync). First beta — the core flows are stable, but this is still a personal project, so please read [Known Limitations](#known-limitations) before reporting something as a bug. See [CHANGELOG.md](CHANGELOG.md) for what's new in this release.
 >
 > This repository distributes a **pre-built Android APK only** — the app's source code is not published here.
 
@@ -40,22 +40,23 @@ PhotoShare lets you create groups, organize shared albums inside them, and contr
 
 | | |
 |---|---|
-| Version | `v0.0.5-alpha` |
+| Version | `v0.1.0-beta` |
 | Platform | Android only |
 | Distribution | Signed release APK, attached to the [GitHub Release](https://github.com/Pouria26/Photoshare/releases) |
 | Source code | Not published in this repository — this is an APK-only distribution |
 | Backend | Supabase (a shared backend operated by the developer; you don't need your own project to use the APK) |
-| Stability | Alpha — core flows work end-to-end, now offline-first |
+| Stability | Beta — core flows are stable, including per-member album/photo visibility and Find & Add Friends |
 
 ---
 
 ## Main Features
 
 - **Groups** — create private (invite-only) or public (discoverable, open to new members) groups, each with a cover image and up to 5 topic tags.
-- **Albums with per-member visibility** — inside a group, each album can be shared with a specific subset of members, so different people can see different albums in the same group.
-- **Photo uploads with per-photo visibility** — when sharing a photo into a group album, you can further restrict which individual members can see that specific photo.
+- **Albums with per-member visibility** — inside a group, each album can be shared with a specific subset of members, so different people can see different albums in the same group. The **album creator** manages who sees an album from a dedicated **Manage Visibility** screen, switching it between **Unrestricted** (everyone in the group) and **Restricted** (a hand-picked member list) — the creator is always listed first and can never be removed from their own album.
+- **Photo uploads with per-photo visibility** — when sharing a photo into a group album, you can further restrict which individual members can see that specific photo. The **uploader** owns this control from their own Manage Visibility screen, and a photo can never be visible to someone who can't already see its album.
+- Access flows down one way — **group membership → album visibility → photo visibility** — and both visibility layers are owned by the creator/uploader only, separate from who can edit or delete content.
 - **Explore** — discover public groups and browse trending public photos, sorted by recent activity ("Hot").
-- **Friends** — search for users by username, send/accept/decline friend requests, and see mutual groups on their profile.
+- **Friends & Find Friends** — search for users by name or username and send, accept, or decline friend requests. Search results always show your current relationship — **Add Friend / Request Sent / Accept / Friend** — and incoming requests can be accepted right from the results, without opening Notifications. When inviting people to a group, an **Invite Friends → Add Friends** shortcut takes you to Find Friends for anyone who isn't a friend yet.
 - **Group invitations & join requests** — invite friends directly to a group, or let people request to join a group that requires approval.
 - **Notifications** — receive notifications for likes, comments, group invitations, and other important activity.
 - **Profiles** — your own profile (stats, photo grid, edit profile, light/dark theme) and public profile pages for other members.
@@ -92,7 +93,7 @@ Creating a group means choosing whether it's private or public and tagging it so
 <tr>
 <td width="33%"><img src="assets/screenshots/create-group.jpg" alt="Create group screen"></td>
 <td width="33%"><img src="assets/screenshots/create-album.jpg" alt="Create album screen"></td>
-<td width="33%"><img src="assets/screenshots/group-members.jpg" alt="Group members list"></td>
+<td width="33%"><img src="assets/screenshots/group-member-screen.jpg" alt="Group members list"></td>
 </tr>
 <tr>
 <td valign="top"><b>New Group.</b> Pick Private (invite-only) or Public (discoverable, unlimited members), add a cover photo, and choose up to 5 tags to help people find it in Explore.</td>
@@ -104,6 +105,10 @@ Creating a group means choosing whether it's private or public and tagging it so
 **Per-member album visibility** is one of PhotoShare's core ideas: the same group can look different depending on who's viewing it. In the example below, two members of the same "Friends" group each see a different number of albums, because album access is granted per person rather than to the whole group at once.
 
 <p align="center"><img src="assets/screenshots/album-privacy-feature.png" alt="Diagram: two members of the same group seeing a different number of albums" width="700"></p>
+
+<p align="center"><img src="assets/screenshots/album-visibility.jpg" alt="Manage Album Visibility screen" width="350"></p>
+
+<p align="center"><b>Manage Album Visibility.</b> The album creator switches an album between Unrestricted (everyone in the group) and Restricted (a hand-picked member list), with the current state shown per member and a confirmation step before changes apply.</p>
 
 ### Photos & Sharing
 
@@ -122,22 +127,30 @@ Uploading a photo lets you write a caption and, for private groups, fine-tune wh
 </tr>
 </table>
 
+<p align="center"><img src="assets/screenshots/photo-visibility.jpg" alt="Manage Photo Visibility screen" width="350"></p>
+
+<p align="center"><b>Manage Photo Visibility.</b> After a photo is shared, the uploader can restrict which album viewers see it — only members who can already see the album can be granted the photo, and the uploader always keeps access.</p>
+
 ### Friends, Invitations & Notifications
 
 Friend requests, group invites, and join requests all flow through the same in-app request/response pattern, and every relevant event shows up in Notifications.
 
 <table>
 <tr>
-<td width="33%"><img src="assets/screenshots/invite-friends.jpg" alt="Find and add friends"></td>
+<td width="33%"><img src="assets/screenshots/add-friends.jpg" alt="Find and Add Friends sheet"></td>
+<td width="33%"><img src="assets/screenshots/invite-friends.jpg" alt="Invite Friends sheet"></td>
 <td width="33%"><img src="assets/screenshots/invite-to-group.jpg" alt="Group invitation prompt"></td>
-<td width="33%"><img src="assets/screenshots/notifications.jpg" alt="Notifications screen"></td>
 </tr>
 <tr>
-<td valign="top"><b>Find Friends.</b> Search by username and send a friend request; existing friendships and pending requests are reflected right in the search results.</td>
+<td valign="top"><b>Find & Add Friends.</b> Opened from Home's "Add Friend" or from Invite Friends' "Add New Friends" action. Any incoming friend requests are surfaced at the top so they can be accepted without opening Notifications; search results show your current relationship — Add Friend, Request Sent, Accept, or Friend.</td>
+<td valign="top"><b>Invite Friends.</b> From a group's member list, invite any existing friend with one tap (Member/Pending/Invite state per person); the pinned "Add New Friends" action at the bottom leads straight into Find & Add Friends for anyone who isn't a friend yet.</td>
 <td valign="top"><b>Group Invite.</b> When someone invites you to a group, you can accept to join, decline, or — for public groups — browse it first as a guest before deciding.</td>
-<td valign="top"><b>Notifications.</b> Likes, comments, and group invitations in one feed, filterable by type so activity notifications don't drown out the ones you actually asked for.</td>
 </tr>
 </table>
+
+<p align="center"><img src="assets/screenshots/notifications.jpg" alt="Notifications screen" width="350"></p>
+
+<p align="center"><b>Notifications.</b> Likes, comments, and group invitations in one feed, filterable by type so activity notifications don't drown out the ones you actually asked for.</p>
 
 ### Profile
 
@@ -150,7 +163,7 @@ The profile screen serves as both your personal profile and settings hub. It bri
 </tr>
 <tr>
 <td valign="top"><b>Profile · Upper section.</b> Your profile information, statistics, edit profile access, and recent content at a glance.</td>
-<td valign="top"><b>Profile · Lower section.</b> Additional profile content and the settings area, including theme, notification, and app preferences.</td>
+<td valign="top"><b>Profile · Lower section.</b> Additional profile content and the settings area, including theme, notification, storage dashboard and app preferences.</td>
 </tr>
 </table>
 
@@ -200,7 +213,7 @@ The APK distributed in [Releases](https://github.com/Pouria26/Photoshare/release
 
 ## How the App Is Organized
 
-The app follows a feature-first Clean Architecture layout, with each feature (auth, groups, albums, photos, social, friends, notifications, explore, profile) split into `data` / `domain` / `presentation` layers, Riverpod providers for state, and `go_router` for navigation. See [`docs/architecture.md`](docs/architecture.md) for a full breakdown, and [`docs/offline-first.md`](docs/offline-first.md) for how the local caching layer (Hive + `flutter_cache_manager`) fits into that architecture.
+The app follows a feature-first Clean Architecture layout, with each feature (auth, groups, albums, photos, social, friends, notifications, explore, profile) split into `data` / `domain` / `presentation` layers, Riverpod providers for state, and `go_router` for navigation. See [`docs/architecture.md`](docs/architecture.md) for a full breakdown.
 
 > Since this repository is APK-only, these docs describe how the app is built, for anyone curious — they aren't a guide to building from source.
 
@@ -228,15 +241,15 @@ https://github.com/Pouria26/Photoshare/releases/latest
 | --------------------------- | ----------------------------------------------- |
 | **Application**             | PhotoShare                                      |
 | **Platform**                | Android                                         |
-| **Current Version**         | v0.0.5-alpha                                    |
-| **Version Code**            | 0.0.5+1                                         |
+| **Current Version**         | v0.1.0-beta                                     |
+| **Version Code**            | 0.1.0+10                                         |
 | **Minimum Android Version** | Android 7.0 (API 24) or later                   |
-| **Release Type**            | Alpha                                           |
+| **Release Type**            | Beta                                             |
 
 ## Known Limitations
 
 - **Android only** — no iOS, web, or desktop build is currently produced or supported.
-- **Alpha quality** — this is a personal project in active development; expect bugs and rough edges.
+- **Beta quality** — this is a personal project in active development; expect bugs and rough edges.
 - **Source code is not published** — this repository distributes the APK and documentation only.
 - **Backend is shared, not self-hosted** — the app talks to a Supabase/Cloudinary backend operated by the developer; there's no option to point it at your own backend from this build.
 - **Offline is a viewing cache, not a sync engine** — image bytes are cached only for images you've actually viewed, and mutations (uploads, edits, removals) require connectivity: they fail fast with a clear error rather than being queued.

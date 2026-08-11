@@ -25,6 +25,10 @@ users (shadow of auth.users)
 ### Social layer (cross-cutting, not group-scoped)
 ```
 friendships (requester/addressee, status: pending|accepted|declined|blocked)
+  — friend requests are **directional**: `pending` is outgoing for the
+  requester and incoming for the addressee, which is what lets the search
+  surfaces render four UI states (Add Friend / Request Sent / Accept /
+  Friend) from a single server-computed status
 notifications (typed: like, comment, group_invite, mention, friend_request, ...)
 activities (a generic activity-feed/audit table keyed by entity_type+entity_id)
 user_settings (1:1 with users — theme, notification toggles, profile visibility)
@@ -73,6 +77,16 @@ user_settings (1:1 with users — theme, notification toggles, profile visibilit
 - **Ownership transfer is a dedicated RPC** (`transfer_group_ownership`),
   not a role update — it demotes the old owner to admin, promotes the new
   owner, logs it, and asserts exactly one owner remains afterward.
+- **Visibility is creator/uploader-owned, distinct from moderation.** Album
+  visibility is managed by the album **creator** only; photo visibility by
+  the photo **uploader** only — never by group admins — via dedicated
+  SECURITY DEFINER RPCs (`set_album_permissions`, `set_photo_permissions`,
+  `get_album_permissions`, `get_photo_permissions`) and RLS policies on
+  `album_permissions`/`photo_permissions`. Photo access can never exceed
+  album access (subset invariant), new members never auto-gain access to
+  restricted albums, and pending private-group invitees can preview
+  *unrestricted* albums only. The screens and where the code lives are
+  mapped in `docs/PROJECT_MAP.md` (§5/§10).
 
 ## 2. Permission model
 
@@ -106,6 +120,25 @@ visibility/membership. This three-level cascade is intentional and lets a
 group admin restrict a specific album or even a specific photo without
 changing the group's overall visibility.
 
+**Visibility ownership is separate from moderation.** Who can *manage
+visibility* is strictly narrower than who can edit/delete:
+`check_can_manage_album_visibility` (album creator only) and
+`check_can_manage_photo_visibility` (photo uploader only) back the
+`album_permissions`/`photo_permissions` RLS policies, while
+`check_can_manage_album`/`check_can_manage_photo` (creator or group
+admin/owner) continue to back edit/delete. A group admin can edit an album
+or photo they didn't create but can never change who sees it. Two
+hardening rules enforce the model (see `sql/09_private_group_visibility_fixes.sql`
+and `sql/10_visibility_screen_fixes.sql`): (1) **photo visibility is always
+a subset of album visibility** — you cannot grant a photo to a user who
+can't see its album (enforced in `set_photo_permissions()` with a clear
+error *and* by the restrictive `restrict_photo_permissions_subset`
+policy); (2) **new members start with zero access to restricted albums** —
+the old auto-grant trigger `handle_new_group_member_album_permissions()`
+is now a no-op. Pending invitees of a private group can preview its
+*unrestricted* albums only (`check_has_pending_invite()` added to
+`check_can_view_album` and the `albums_select` policy).
+
 **One RESTRICTIVE policy exists**: `restrict_private_albums` on `albums`.
 Postgres ANDs all RESTRICTIVE policies together with the OR of all
 PERMISSIVE policies for the same command. In practice this means: no matter
@@ -134,8 +167,14 @@ Grouped by purpose:
 **Photos / albums**
 - `add_photo_tag` — upsert-style tagging (manual/ai/auto sourced)
 - `set_album_permissions`, `set_photo_permissions` — bulk-replace the
-  allow-list for a `group_only` album or a restricted photo
-- `get_album_permissions` — who can see a given album and their current flag
+  allow-list for a `group_only` album or a restricted photo; both enforce
+  creator/uploader-only ownership, force-include the owner, and
+  `set_photo_permissions` additionally validates the album-subset
+  invariant and syncs `photos.is_visible`
+- `get_album_permissions`, `get_photo_permissions` — who can see a given
+  album/photo and their current flag (`get_album_permissions` also flags
+  the creator; `get_photo_permissions` restricts the candidate pool to
+  users who can already see the parent album)
 - `get_albums_with_visible_counts` — per-group album list with a
   *permission-aware* photo count (deliberately relies on the caller's own
   RLS context rather than re-implementing the visibility logic — see the
@@ -144,8 +183,13 @@ Grouped by purpose:
 **Feed / search / social**
 - `get_photo_feed`, `get_user_groups` — personalized feed (⚠️ see Known
   Issues — this one is broken as captured)
-- `search_public_groups`, `search_users_with_friendship`,
-  `get_mentionable_users` — typeahead/search endpoints
+- `search_public_groups`, `get_mentionable_users` — typeahead/search
+  endpoints
+- `search_users_with_friendship` — user typeahead returning the
+  friendship state **server-side and directional** (`requested`/
+  `received`/`accepted`/`none` plus `friendship_id`), so the client never
+  guesses it; the ambiguous overload that used to make it raise `42725`
+  was removed (see Known Issue #2)
 - `get_user_friends`, `get_pending_requests`, `get_friendship_status`,
   `are_friends` — friend graph queries
 
@@ -166,20 +210,24 @@ what to do with each before shipping a new build:
    code — the app has probably moved to querying `photos` directly (e.g.
    paired with `get_albums_with_visible_counts`).
 
-2. **Duplicate function overloads never cleaned up:**
+2. **Duplicate function overloads (one still live, one resolved):**
    - `get_mentionable_users(uuid, text)` (old, `plpgsql`, references
      `groups.is_private` — a column that doesn't exist on the current
-     `groups` table, so this overload is also broken) vs.
+     `groups` table, so this overload is broken) still co-exists with
      `get_mentionable_users(uuid, text, uuid)` (current, `sql`, uses
-     `groups.visibility`). PostgREST will pick an overload based on the
-     arguments the client actually sends — if any client code still calls
-     the 2-arg version, it will error.
-   - `search_users_with_friendship(uuid, text)` vs.
-     `(uuid, text, uuid, integer)` — both work, just redundant; the 3-arg
-     version is a slightly refined superset (adds 'requested'/'received'
-     framing for pending requests instead of a flat 'pending').
-   Recommendation: drop the stale overloads in a fresh build once you
-   confirm which one the client calls.
+     `groups.visibility`). PostgREST picks an overload by the arguments
+     the client sends — if any client code still calls the 2-arg version,
+     it will error. **Not yet resolved.**
+   - `search_users_with_friendship` — **RESOLVED (this branch).** The
+     project used to have `(uuid, text)` and `(uuid, text, integer)`
+     overloads; the 3-arg version's `p_limit` had a default, so when the
+     app called with `(p_current_user, p_query)`, Postgres could not pick
+     a best candidate and raised `42725 function ... is not unique` on
+     every search — which the Dart repository swallowed into an empty
+     result (the "search returns no users" bug). The ambiguous overload
+     was dropped; only the correct 2-arg directional implementation
+     remains (returns `requested`/`received`/`accepted`/`none` plus
+     `friendship_id`, computed server-side).
 
 3. **`public_profiles` view is `SECURITY DEFINER`** (flagged as an
    ERROR-level finding by Supabase's own linter). This means the view
@@ -225,9 +273,10 @@ what to do with each before shipping a new build:
    name `friend_id` (there is **no** `id` column), and `get_pending_requests`
    returns it as `requester_id`. Screens navigating to `/profile/:userId`
    MUST read those keys — reading `['id']` yields `null`, producing
-   `/profile/null` and a false "User not found". The Friends list was fixed
-   to use `friend_id`; `friend_requests_screen.dart` still reads
-   `request['id']` and hits the same bug class (not yet fixed).
+   `/profile/null` and a false "User not found". Both screens are fixed:
+   the Friends list uses `friend_id`, and the Friend Requests screen uses
+   `requester_id` — unambiguous there, since that RPC returns only
+   incoming requests, where the requester is always the other party.
 
 ## 5. Migration history & what it implies
 
@@ -252,3 +301,14 @@ sign-up flow being hardened: case-insensitive unique usernames
 (`users_username_unique_ci`) plus collision-safe retry logic in
 `handle_new_user()`, and syncing `is_verified` from Supabase Auth's own
 `email_confirmed_at` via a new `auth.users` trigger.
+
+On top of that history, the repo ships two follow-up hardening migrations
+in `sql/` that the app depends on: `09_private_group_visibility_fixes.sql`
+and `10_visibility_screen_fixes.sql` (run order in
+`sql/00_run_all.sql`; safe on both fresh and existing projects). They fix
+the album/photo visibility hierarchy — creator/uploader-only ownership,
+the photo⊆album subset invariant, the no-op auto-grant trigger,
+pending-invite preview of unrestricted albums, and the
+`get_album_permissions` "absent row = not granted" + `is_creator` fix —
+mapped to the screens in `docs/PROJECT_MAP.md` (§10) and summarized for
+users in `README.md`.

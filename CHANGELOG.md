@@ -2,6 +2,32 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.1.0-beta] — 2026-08-10
+
+The **visibility & friends release**. Every album and photo can now be scoped to a hand-picked member list through dedicated **Manage Visibility** screens — owned by the album creator / photo uploader only and enforced server-side — friend discovery is a first-class experience with four directional relationship states and accept-from-search, and clearing the image caches now actually frees disk space.
+
+### Added
+- **Manage Visibility screens** for albums and photos: the album creator (`/group/:groupId/album/:albumId/visibility`) and the photo uploader (`/photo/:photoId/visibility`) can switch between unrestricted and restricted access and hand-pick which group members can see their content. The creator/uploader is always listed first, always keeps access, and can never be removed; changes require a confirmation step before applying.
+- **Find & Add Friends**: incoming friend requests are surfaced at the top of Home's "Find & Add Friends" sheet, and incoming requests can be **accepted directly from search** — no need to open Notifications. The group-members "Invite Friends" sheet gained a pinned "Don't have them as a friend yet? Find them by name." action that leads to the existing Find Friends screen. All surfaces reuse the existing friend providers/repository (no duplicate friend system).
+- **Directional friendship states in search**: `search_users_with_friendship` now returns `none`/`requested`/`received`/`accepted` server-side, rendered as **Add Friend / Request Sent / Accept / Friend**.
+
+### Security / Permissions
+- **Album visibility is album-creator-only; photo visibility is photo-uploader-only** — enforced in the backend (`check_can_manage_album_visibility` / `check_can_manage_photo_visibility`, RLS on `album_permissions`/`photo_permissions`, and the `set_album_permissions`/`set_photo_permissions` RPCs) as well as in the UI menus. Group admins can still edit/delete content but can never change who sees it.
+- **Photo visibility is always a subset of album visibility**: granting a photo to someone who can't see its album is blocked by the RPC (clear error) and by the restrictive `restrict_photo_permissions_subset` RLS policy; the candidate list only ever shows album-viewers.
+- **New members start with zero access to restricted albums** — the old auto-grant trigger was neutralized, so joining (or rejoining) a group no longer silently opens every existing restricted album.
+- Pending invitees of a private group can now **preview the group's unrestricted albums** (and photos) before accepting the invitation; restricted/private albums stay invisible.
+- **Session-isolation hardening (`SessionGuard`)** — every async fetch now captures the signed-in user id *before* awaiting and discards its result if the identity changed while the call was in flight (logout, or logout+login as a different user), so a stale response can never be written into a new user's state or cache. The group provider's debounced Realtime refresh timer is also cancelled on dispose so a pending reload can't fire after logout.
+
+### Fixed
+- **Friend search returned no users**: two overloads of `search_users_with_friendship` (one with a defaulted parameter) made Postgres raise `42725 function ... is not unique` on every call, which the repository swallowed into an empty result. The ambiguous overload was removed; search now works and returns correct directional statuses.
+- **Friend Requests → public profile opened "User not found"**: the screen read `request['id']` from the `get_pending_requests` result, but that RPC has no `id` column — the other user's UUID is `requester_id` — so it navigated to `/profile/null`. It now uses `requester_id`, which is unambiguous: the RPC only returns incoming requests, so the requester is always the other party.
+- **Album visibility screen showed every member as granted**: `get_album_permissions` defaulted missing rows to `can_view = true` for restricted albums; it now treats an absent row as *not granted*, flags the creator (`is_creator`), and lists the creator first. The photo upload screen's member list now reads the same RPC instead of querying the permissions table directly (which under RLS only ever returned the caller's own row).
+- **Edit/Delete Group actions disappeared**: `Group.role` was missing from `toJson()`, so every Hive-cache round-trip reset the caller's role back to `member` — the group detail screen then correctly, but wrongly, hid Edit/Delete for owners and admins. The role now round-trips through the cache.
+- **"Clear Cache / Clear All" didn't release disk space**: `flutter_cache_manager.emptyCache()` only clears bookkeeping, leaving the image files orphaned on disk. Cache clearing now also **physically deletes the on-disk cache directories** (Storage Dashboard Clear All, logout, and the Explore cache at every app launch).
+
+### Improved
+- Incoming friend requests are no longer buried in Notifications — the Find Friends surface acts as a first-class request inbox.
+
 ## [0.0.5-alpha] — 2026-08-09
 
 The **offline-first release**. PhotoShare now caches groups, albums, photos, notifications, and your profile locally — everything opens instantly, works without a connection, and re-syncs automatically when you're back online. This release also hardens the group permission hierarchy (enforced in both the Supabase backend and the app), reworks the Friends and group-members experience, and fixes a batch of stability issues.
